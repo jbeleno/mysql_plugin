@@ -108,15 +108,14 @@ class MySQLToS3Operator(BaseOperator):
         params = self.mysql_params
 
         # Perform query and convert returned tuple to list
-        results = list(hook.get_records(query, params))
+        results = hook.get_records(query, params)
         logging.info('Successfully performed query.')
 
         # Iterate through list of dictionaries (one dict per row queried)
         # and convert datetime and date values to isoformat.
-        # (e.g. datetime(2017, 08, 01) --> "2017-08-01T00:00:00")
-        results = [dict([k, str(v)] if v is not None else [k, v]
-                   for k, v in i.items()) for i in results]
-        results = '\n'.join([json.dumps(i) for i in results])
+        # (e.g. datetime(2017, 08, 01) --> "2017-08-01 00:00:00")
+        results = results.to_csv(header=True, index=False,
+                                 date_format='%Y-%m-%d %H:%M:%S')
         self.s3_upload(results)
         return results
 
