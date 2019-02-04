@@ -22,8 +22,10 @@ class MySQLToS3Operator(BaseOperator):
 
     :param mysql_conn_id:           The input mysql connection id.
     :type mysql_conn_id:            string
-    :param mysql_table:             The input MySQL table to pull data from.
-    :type mysql_table:              string
+    :param mysql_query:             The input MySQL query to pull data from.
+    :type mysql_query:              string
+    :param mysql_params:            The MySQL parameters for the query.
+    :type mysql_params:             string
     :param s3_conn_id:              The destination s3 connection id.
     :type s3_conn_id:               string
     :param s3_bucket:               The destination s3 bucket.
@@ -55,7 +57,8 @@ class MySQLToS3Operator(BaseOperator):
     @apply_defaults
     def __init__(self,
                  mysql_conn_id,
-                 mysql_table,
+                 mysql_query,
+                 mysql_params=None,
                  s3_conn_id,
                  s3_bucket,
                  s3_key,
@@ -67,7 +70,8 @@ class MySQLToS3Operator(BaseOperator):
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.mysql_conn_id = mysql_conn_id
-        self.mysql_table = mysql_table
+        self.mysql_query = mysql_query
+        self.mysql_params = mysql_params
         self.s3_conn_id = s3_conn_id
         self.s3_bucket = s3_bucket
         self.s3_key = s3_key
@@ -88,9 +92,9 @@ class MySQLToS3Operator(BaseOperator):
         output_array = []
         for i in results:
             new_dict = {}
-            new_dict['name']=i['COLUMN_NAME']
-            new_dict['type']=i['COLUMN_TYPE']
-            
+            new_dict['name'] = i['COLUMN_NAME']
+            new_dict['type'] = i['COLUMN_TYPE']
+
             if len(new_dict) == 2:
                 output_array.append(new_dict)
         self.s3_upload(json.dumps(output_array), schema=True)
@@ -100,26 +104,11 @@ class MySQLToS3Operator(BaseOperator):
         logging.info('Start Date: {0}'.format(self.start))
         logging.info('End Date: {0}'.format(self.end))
 
-        if all([self.incremental_key, self.start, self.end]):
-            query_filter = """ WHERE {0} >= '{1}' AND {0} < '{2}'
-                """.format(self.incremental_key, self.start, self.end)
-
-        if all([self.incremental_key, self.start]) and not self.end:
-            query_filter = """ WHERE {0} >= '{1}'
-                """.format(self.incremental_key, self.start)
-
-        if not self.incremental_key:
-            query_filter = ''
-
-        query = \
-            """
-            SELECT *
-            FROM {0}
-            {1}
-            """.format(self.mysql_table, query_filter)
+        query = self.mysql_query
+        params = self.mysql_params
 
         # Perform query and convert returned tuple to list
-        results = list(hook.get_records(query))
+        results = list(hook.get_records(query, params))
         logging.info('Successfully performed query.')
 
         # Iterate through list of dictionaries (one dict per row queried)
