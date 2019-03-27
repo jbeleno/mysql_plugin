@@ -108,19 +108,20 @@ class MySQLToS3Operator(BaseOperator):
         params = self.mysql_params
 
         # Perform query and convert returned tuple to list
-        results = hook.get_records(query, params)
+        results = hook.get_pandas_df(query, params)
         logging.info('Successfully performed query.')
 
         # Iterate through list of dictionaries (one dict per row queried)
         # and convert datetime and date values to isoformat.
         # (e.g. datetime(2017, 08, 01) --> "2017-08-01 00:00:00")
-        results = results.to_csv(header=True, index=False,
+        results = results.to_csv(header=False, index=False,
+                                 float_format="%.0f",
                                  date_format='%Y-%m-%d %H:%M:%S')
         self.s3_upload(results)
         return results
 
     def s3_upload(self, results, schema=False):
-        s3 = S3Hook(s3_conn_id=self.s3_conn_id)
+        s3 = S3Hook(aws_conn_id=self.s3_conn_id)
         key = '{0}'.format(self.s3_key)
         # If the file being uploaded to s3 is a schema, append "_schema" to the
         # end of the file name.
@@ -134,5 +135,4 @@ class MySQLToS3Operator(BaseOperator):
             key=key,
             replace=True
         )
-        s3.connection.close()
         logging.info('File uploaded to s3')
